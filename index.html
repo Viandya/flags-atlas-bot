@@ -50,7 +50,9 @@ img{max-width:100%}
 }
 *{box-sizing:border-box}
 html,body{height:100%}
-html{height:var(--tg-viewport-stable-height, 100dvh)}
+/* На телефонах высота страницы держится на замеренном JS-высоте вьюпорта Telegram (--app-h),
+   а не на dvh/vh — внутри WebView Telegram эти единицы часто считают неточно. */
+html{height:var(--app-h, 100dvh)}
 body{
   margin:0;background:var(--bg);color:var(--ink);
   font-family:var(--font-body);font-size:16px;line-height:1.45;
@@ -740,6 +742,28 @@ function applyTgInsets(){
     document.documentElement.style.setProperty('--tg-inset-top', (sa.top + csa.top) + 'px');
     document.documentElement.style.setProperty('--tg-inset-bottom', (sa.bottom + csa.bottom) + 'px');
   }catch(e){}
+}
+
+/* Реальная высота вьюпорта. Внутри WebView Telegram dvh/vh часто врут (учитывают то
+   системную панель, то нет), поэтому меряем сами и держим актуальным по событиям. */
+function syncViewportHeight(){
+  let h = window.innerHeight;
+  if(tg && tg.viewportStableHeight) h = tg.viewportStableHeight;
+  else if(window.visualViewport) h = window.visualViewport.height;
+  document.documentElement.style.setProperty('--app-h', h + 'px');
+}
+syncViewportHeight();
+window.addEventListener('resize', syncViewportHeight);
+window.addEventListener('orientationchange', function(){ setTimeout(syncViewportHeight, 300); });
+if(window.visualViewport) window.visualViewport.addEventListener('resize', syncViewportHeight);
+if(tg){
+  try{
+    tg.onEvent('viewportChanged', syncViewportHeight);
+    tg.onEvent('fullscreenChanged', function(){ setTimeout(syncViewportHeight, 300); });
+  }catch(e){}
+  // Переход в fullscreen у части клиентов завершается с задержкой — перемеряем ещё раз.
+  setTimeout(syncViewportHeight, 300);
+  setTimeout(syncViewportHeight, 800);
 }
 
 renderMenu();
